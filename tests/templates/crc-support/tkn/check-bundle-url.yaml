@@ -1,0 +1,23 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: check-bundle-url
+spec:
+  description: Checks the bundle can be downloaded and returns the url it was found at
+  params:
+    - name: bundle-base-url
+      description: base url to download the bundle from
+    - name: bundle-base-url-fallbacks
+      type: array
+      default: []
+    - name: bundle-name
+      description: bundle name
+    - name: bundle-shasumfile
+      default: sha256sum.txt
+  results:
+    - name: bundle-base-url
+      description: the url the bundle was found at
+  steps:
+    - name: check
+      image: registry.access.redhat.com/ubi9/ubi-minimal
+      script: echo

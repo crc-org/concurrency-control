@@ -1,5 +1,5 @@
 import os
-import runcmd 
+import cluster
 import json 
 import time 
 import inform
@@ -17,8 +17,8 @@ LABEL_TASK = os.environ.get("LABEL_TASK")
 
 
 def set_project():
-    cmd = "export KUBECONFIG=/tmp/kubeconfig;oc project {}".format(NAMESPACE)
-    code, out, err = runcmd.run_cmd(cmd)
+    env = dict(os.environ, KUBECONFIG="/tmp/kubeconfig")
+    code, out, err = cluster.oc("project", NAMESPACE, env=env)
     if code == 0:
         logger.info(out)
     else:
@@ -27,43 +27,36 @@ def set_project():
         raise Exception("can't access to project {}".format(NAMESPACE))
 
 def get_pending_runs():
-    cmd = "tkn pipelinerun list | grep Pending"
-    code, out, err = runcmd.run_cmd(cmd)
-    pendings = []
-    if code==0 and out != "" :
-        lines = out.splitlines()
-        pendings = [line.split()[0] for line in lines] 
-    else:
+    runs = [pr for pr in cluster.list_pipelineruns()
+            if pr.get("spec", {}).get("status") == "PipelineRunPending"]
+    # oldest first, so runs waiting for the same machine are served in order
+    runs.sort(key=lambda pr: pr["metadata"].get("creationTimestamp", ""))
+    pendings = [pr["metadata"]["name"] for pr in runs]
+    if not pendings:
         logger.info("Not find any pending pipelinerun")
     return pendings
     
 def get_run_lable(run_name: str, label_name: str):
-    cmd = "oc get pipelinerun {0} -o json | jq -r '.metadata.labels[\"{1}\"]'".format(run_name, label_name)
-    code, out, _ = runcmd.run_cmd(cmd)
-    if code==0 and out.strip() != "null" :
-        return out.strip()
+    run = cluster.get_pipelinerun(run_name)
+    if run is not None:
+        return run["metadata"].get("labels", {}).get(label_name)
     else:
         return None
 
 def get_machine_status(machine: str):
-    cmd = "oc get cm {} -o json | jq -r '.data[\"{}\"]'".format(MACHINE_STATUS_CM, machine)
-    code, out, _ = runcmd.run_cmd(cmd)
-    if code==0 and out.strip() != "null" :
-        return out.strip()
+    data = cluster.get_configmap_data(MACHINE_STATUS_CM)
+    if data is not None and machine in data:
+        return data[machine]
     else:
         logger.error(f"failed to find {machine} in configmap {MACHINE_STATUS_CM}")
         return None
 
 def change_machine_status(machine: str, status: str):
-    cmd = f"oc set data configmap {MACHINE_STATUS_CM} {machine}={status}"
-    code, out, _ = runcmd.run_cmd(cmd)
-    if code == 0:
-        logger.info(out)
+    if cluster.set_configmap_key(MACHINE_STATUS_CM, machine, status):
         logger.info(f"successfully set {machine} to {status}")
         return True
     else:
         logger.error(f"failed to change {machine} status to {status}")
-        logger.error(out)
         return False
 
 def check_run_finish(run: str):
@@ -86,12 +79,11 @@ def check_run_finish(run: str):
 
 def get_run_status(run: str):
     status = None
-    cmd = f"tkn pipelinerun list | grep {run}"
-    code, out, _ = runcmd.run_cmd(cmd)
-    if code==0 and out!="" :
-        status = out.split()[-1]
+    pipelinerun = cluster.get_pipelinerun(run)
+    if pipelinerun is not None:
+        status = cluster.pipelinerun_status(pipelinerun)
     else:
-        logger.error(f"failed to get {run} status: {out}")
+        logger.error(f"failed to get {run} status")
     return status
 
 def monitor_runs_finish():
@@ -115,9 +107,7 @@ def monitor_runs_finish():
 
 
 def start_pending_run(run: str):
-    cmd = "oc get pipelinerun {} -o json  | jq '.spec.status = \"\"' | oc apply -f -".format(run)
-    code, out, _ = runcmd.run_cmd(cmd)
-    if code == 0:
+    if cluster.start_pipelinerun(run):
         logger.info(f"sucessfully start pipelinerun {run}")
     else:
         logger.error("failed to start pipelinerun {}".format(run))  
@@ -168,10 +158,9 @@ def monitor_pending_run():
                 logger.warning(f"machine {machine2} status is {status2} !!!")
 
 def check_task_finish(pipelinerun: str, task_name: str):
-    cmd = "oc get taskrun -l tekton.dev/pipelineRun={} | grep {}".format(pipelinerun, task_name)
-    code, out, _ = runcmd.run_cmd(cmd)
-    if code==0 and out != "" :
-        status = out.split()[1]
+    taskruns = cluster.get_taskruns(pipelinerun, task_name)
+    if taskruns:
+        status = cluster.taskrun_succeeded(taskruns[0])
         if status == "True":
             return True
         elif status == "False":

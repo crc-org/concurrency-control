@@ -1,55 +1,1357 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
-    <title>Machine Status</title>
-    <meta http-equiv="refresh" content="30">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Test Machines</title>
+    <style>
+        :root {
+            --bg: #f5f6f8;
+            --surface: #ffffff;
+            --text: #1c2230;
+            --muted: #5f6878;
+            --border: #dde1e7;
+            --accent: #2456d3;
+            --accent-text: #ffffff;
+            --free-bg: #e2f3e7;
+            --free-fg: #1b6a33;
+            --busy-bg: #fcefd8;
+            --busy-fg: #865100;
+            --other-bg: #eceef2;
+            --other-fg: #4a5262;
+            --danger: #bf3129;
+            --danger-bg: #fbe5e4;
+            --ok-bg: #e2f3e7;
+            --ok-fg: #1b6a33;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #13161b;
+                --surface: #1c2027;
+                --text: #e5e8ed;
+                --muted: #98a1b0;
+                --border: #2e343e;
+                --accent: #6d94ff;
+                --accent-text: #0c1120;
+                --free-bg: #16321f;
+                --free-fg: #80d69b;
+                --busy-bg: #39290f;
+                --busy-fg: #f1c26c;
+                --other-bg: #2a2f38;
+                --other-fg: #b5bdcb;
+                --danger: #ff7b73;
+                --danger-bg: #3a1b1a;
+                --ok-bg: #16321f;
+                --ok-fg: #80d69b;
+            }
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 24px 16px 8px;
+        }
+
+        h1 { margin: 0; font-size: 22px; }
+        h2 { margin: 0 0 12px; font-size: 16px; }
+
+        main {
+            display: grid;
+            gap: 16px;
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 8px 16px 32px;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 16px;
+            min-width: 0;
+        }
+
+        .card.locked { background: transparent; border-style: dashed; }
+        .card.locked h2 { margin-bottom: 4px; color: var(--muted); }
+        .card.locked p { margin: 0; }
+
+        .card-head {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .muted { color: var(--muted); }
+        .small { font-size: 13px; }
+
+        .table-wrap { overflow-x: auto; }
+
+        table { width: 100%; border-collapse: collapse; }
+
+        th, td {
+            text-align: left;
+            padding: 8px 10px;
+            border-bottom: 1px solid var(--border);
+            vertical-align: middle;
+        }
+
+        th { font-size: 13px; font-weight: 600; color: var(--muted); }
+        tr:last-child td { border-bottom: 0; }
+        td.name { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; white-space: nowrap; }
+        td.actions { text-align: right; white-space: nowrap; }
+        .action-buttons { display: inline-flex; gap: 6px; }
+
+        /* machine check results, in a row under the machine */
+        tr.has-check td { border-bottom: 0; }
+        tr.check-row td { padding-top: 0; }
+        .check-box { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+        .check-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 13px; margin-bottom: 6px; }
+        .check-head .problems { color: var(--danger); font-weight: 600; }
+        .check-head .all-ok { color: var(--free-fg); font-weight: 600; }
+        .check-head button.link { margin-left: auto; }
+        .check-list { display: grid; grid-template-columns: auto auto 1fr; gap: 3px 10px; margin: 0; padding: 0; list-style: none; font-size: 13px; }
+        .check-list li { display: contents; }
+        .check-list .icon { font-weight: 700; }
+        .check-list .ok .icon { color: var(--free-fg); }
+        .check-list .fail .icon { color: var(--danger); }
+        .check-list .fail .item { font-weight: 600; }
+        .check-list .detail { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; overflow-wrap: anywhere; }
+        .check-list .fail .detail { color: var(--danger); }
+        td.empty { color: var(--muted); text-align: center; padding: 20px; }
+
+        /* on narrow screens the secondary column folds into a line under the name */
+        .sub { display: none; font: 12px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: var(--muted); white-space: normal; }
+
+        @media (max-width: 600px) {
+            .col-extra { display: none; }
+            .sub { display: block; }
+            .card { padding: 12px; }
+            th, td { padding: 8px 6px; }
+            td.name { font-size: 13px; }
+            td.actions button { padding: 4px 10px; font-size: 13px; }
+            .action-buttons { flex-direction: column; }
+            .check-list { grid-template-columns: auto 1fr; }
+            .check-list .detail { grid-column: 2; margin-bottom: 4px; }
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 1px 10px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .badge.free { background: var(--free-bg); color: var(--free-fg); }
+        .badge.busy { background: var(--busy-bg); color: var(--busy-fg); }
+        .badge.other { background: var(--other-bg); color: var(--other-fg); }
+
+        button, input, textarea { font: inherit; color: inherit; }
+
+        button {
+            border: 1px solid var(--border);
+            background: var(--surface);
+            border-radius: 6px;
+            padding: 6px 14px;
+            cursor: pointer;
+        }
+
+        button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); font-weight: 600; }
+        button.danger { color: var(--danger); }
+        button.danger:hover:not(:disabled) { background: var(--danger-bg); }
+        button:disabled { opacity: .45; cursor: not-allowed; }
+        button.link { border: 0; background: none; padding: 0; color: var(--accent); font-size: inherit; }
+        button.link:hover { text-decoration: underline; }
+
+        input, textarea {
+            width: 100%;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 7px 10px;
+        }
+
+        input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+        input:invalid:not(:placeholder-shown) { border-color: var(--danger); }
+
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 12px;
+        }
+
+        fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+
+        select {
+            width: 100%;
+            font: inherit;
+            color: inherit;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 7px 10px;
+        }
+
+        select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+        input:disabled { opacity: .6; }
+
+        /* preset editor */
+        #preset-form { display: grid; gap: 16px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+        #preset-form h3 { margin: 0; font-size: 15px; }
+        #preset-form legend, #preset-form summary { padding: 0; margin-bottom: 8px; font-size: 13px; font-weight: 700; color: var(--muted); }
+        #preset-form summary { cursor: pointer; }
+        #preset-form .form-actions { margin-top: 0; }
+        .field .label { font-size: 13px; font-weight: 600; }
+        .field .req { font-weight: 400; color: var(--muted); }
+        .ws-row { display: flex; gap: 8px; }
+        .ws-row select { width: auto; flex: 0 0 auto; }
+        .ws-row input { flex: 1; min-width: 0; }
+        input[type=checkbox] { width: auto; }
+
+        /* pipeline builder */
+        #pipeline-form { display: grid; gap: 14px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+        #pipeline-form h3 { margin: 0; font-size: 15px; }
+        #pipeline-form p { margin: 0; }
+        #pipeline-form .form-actions { margin-top: 0; }
+        /* long template names in the dropdowns mustn't widen the form */
+        #pipeline-form > *, .step-card > *, .step-inputs > .input-row > * { min-width: 0; }
+        .step-inputs select, .step-inputs input { min-width: 0; max-width: 100%; }
+        .step-card { display: grid; gap: 10px; margin-bottom: 10px; padding: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; }
+        .step-card.at-end { border-style: dashed; }
+        .step-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+        .step-no { min-width: 1.6em; font-weight: 700; color: var(--muted); }
+        .step-head input { flex: 0 1 190px; background: var(--surface); }
+        .step-head select { flex: 1 1 240px; width: auto; min-width: 0; background: var(--surface); }
+        .step-head button.link { margin-left: auto; color: var(--danger); }
+        .waits { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; font-size: 13px; }
+        .waits label { display: inline-flex; align-items: center; gap: 5px; }
+        .step-inputs { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(170px, 1fr) minmax(170px, 1.6fr); gap: 6px 10px; align-items: start; font-size: 13px; }
+        .step-inputs .input-row { display: contents; }
+        .step-inputs .in-name { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; overflow-wrap: anywhere; }
+        .step-inputs .in-name .hint { display: block; font: 12px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-weight: 400; color: var(--muted); }
+        .step-inputs select, .step-inputs input { background: var(--surface); padding: 5px 8px; font-size: 13px; }
+        .step-inputs .note { color: var(--muted); padding-top: 6px; }
+
+        /* phones; after the rules above so it wins over them */
+        @media (max-width: 600px) {
+            .ws-row { flex-direction: column; }
+            .ws-row select { width: 100%; }
+            .step-inputs { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+            .step-inputs .in-name { margin-top: 8px; }
+            .step-inputs .note:empty { display: none; }
+            .step-head input, .step-head select { flex: 1 1 100%; }
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px 16px;
+        }
+
+        .field { display: grid; gap: 4px; align-content: start; }
+        .field.wide { grid-column: 1 / -1; }
+        .field label { font-size: 13px; font-weight: 600; }
+        .field .hint { font-size: 12px; color: var(--muted); }
+
+        .form-actions { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+
+        .file-label { font-size: 13px; color: var(--accent); cursor: pointer; }
+        .file-label input { display: none; }
+
+        .auth { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .auth input { width: 220px; }
+
+        .msg {
+            margin: 12px 0 0;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .msg.ok { background: var(--ok-bg); color: var(--ok-fg); }
+        .msg.error { background: var(--danger-bg); color: var(--danger); }
+        .notice { background: var(--other-bg); color: var(--other-fg); }
+
+        .stale { color: var(--danger); }
+
+        #log {
+            margin: 0;
+            max-height: 360px;
+            overflow: auto;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 10px 12px;
+            font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        [hidden] { display: none !important; }
+    </style>
 </head>
 
 <body>
-    <h1>Machine Status</h1>
-    <table border="1">
-        <tr>
-            <th>Machine</th>
-            <th>Status</th>
-        </tr>
-        {% for machine, status in statuses.items() %}
-        <tr>
-            <td>{{ machine }}</td>
-            <td>{{ status }}</td>
-        </tr>
-        {% endfor %}
-    </table>
+    <header>
+        <h1>Test machines</h1>
+        <div class="auth" id="auth">
+            <form id="unlock-form" class="auth" hidden>
+                <input type="password" id="token-input" placeholder="Admin token" autocomplete="off" aria-label="Admin token">
+                <button type="submit">Unlock</button>
+            </form>
+            <span id="unlocked" class="auth" hidden>
+                <span class="muted small">Admin mode</span>
+                <button type="button" id="lock-btn">Lock</button>
+            </span>
+        </div>
+    </header>
 
-    <h2>Running Pipelines</h2>
-    <table border="1">
-        <tr>
-            <th>Pipeline Run</th>
-            <th>Machine</th>
-        </tr>
-        {% for run, machine in wait_finish_runs %}
-        <tr>
-            <td>{{ run }}</td>
-            <td>{{ machine }}</td>
-        </tr>
-        {% endfor %}
-    </table>
+    <main>
+        <p id="api-disabled" class="msg notice" hidden>
+            Adding and removing machines is turned off because the controller has no <code>API_TOKEN</code> set.
+        </p>
+        <p id="token-msg" class="msg" role="alert" hidden></p>
 
-    <h2>Execution Log</h2>
-    <textarea id="log" rows="20" cols="150" readonly style="white-space: pre-wrap;">{{ log_contents }}</textarea>
+        <section class="card">
+            <div class="card-head">
+                <h2>Machines</h2>
+                <span id="updated" class="muted small"></span>
+            </div>
+            <div class="table-wrap">
+                <table id="machines">
+                    <thead>
+                        <tr>
+                            <th>Machine</th>
+                            <th>Status</th>
+                            <th class="col-extra">Used by</th>
+                            <th id="action-col" aria-label="Actions"></th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <p id="machines-msg" class="msg" role="status" hidden></p>
+        </section>
+
+        <section class="card" id="add-card">
+            <h2>Add machine</h2>
+            <p id="locked-hint" class="muted small" hidden>
+                <button type="button" class="link" id="locked-unlock">Enter the admin token</button> to add or remove machines.
+            </p>
+            <form id="add-form" autocomplete="off">
+                <fieldset id="add-fields">
+                    <div class="form-grid">
+                        <div class="field">
+                            <label for="f-name">Name</label>
+                            <input id="f-name" name="name" required placeholder="e.g. linux-arm64-1"
+                                pattern="[a-z0-9]([\-a-z0-9]{0,61}[a-z0-9])?" maxlength="63">
+                            <span class="hint">Lowercase letters, digits and <code>-</code>. Include <code>windows</code> for Windows hosts.</span>
+                        </div>
+                        <div class="field">
+                            <label for="f-host">Host</label>
+                            <input id="f-host" name="host" required placeholder="hostname or IP">
+                        </div>
+                        <div class="field">
+                            <label for="f-user">SSH user</label>
+                            <input id="f-user" name="username" required placeholder="e.g. crcqe">
+                        </div>
+                        <div class="field wide">
+                            <label for="f-key">SSH private key</label>
+                            <textarea id="f-key" name="private_key" required spellcheck="false"
+                                placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea>
+                            <span class="hint">
+                                <label class="file-label">Load from file…<input type="file" id="f-keyfile"></label>
+                                · Saved as a cluster secret. The page doesn't keep it.
+                            </span>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="primary" id="add-btn">Add machine</button>
+                    </div>
+                </fieldset>
+            </form>
+            <p id="add-msg" class="msg" role="status" hidden></p>
+        </section>
+
+        <section class="card">
+            <h2>Running pipelines</h2>
+            <div class="table-wrap">
+                <table id="runs">
+                    <thead>
+                        <tr>
+                            <th>PipelineRun</th>
+                            <th>Machine</th>
+                            <th class="col-extra">Held until</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="card" id="pipelines-card">
+            <div class="card-head">
+                <h2>Pipelines</h2>
+                <button type="button" id="new-pipeline-btn" class="primary" hidden>New pipeline</button>
+            </div>
+            <p id="pipelines-locked-hint" class="muted small" hidden>
+                <button type="button" class="link" id="pipelines-unlock">Enter the admin token</button> to build pipelines from the ci-definitions templates.
+            </p>
+            <div class="table-wrap">
+                <table id="pipelines">
+                    <thead>
+                        <tr>
+                            <th>Pipeline</th>
+                            <th class="col-extra">Steps</th>
+                            <th class="col-extra">Made</th>
+                            <th id="pipeline-action-col" aria-label="Actions"></th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <p id="pipelines-msg" class="msg" role="status" hidden></p>
+
+            <form id="pipeline-form" autocomplete="off" hidden>
+                <h3 id="pipeline-form-title">New pipeline</h3>
+                <p class="muted small">Every step is a Task template from ci-definitions at <code>main</code>. The templates can't be changed here.</p>
+                <div class="form-grid">
+                    <div class="field">
+                        <label for="pl-name">Name</label>
+                        <input id="pl-name" required placeholder="e.g. crc-qe-quick"
+                            pattern="[a-z0-9]([\-a-z0-9]{0,61}[a-z0-9])?" maxlength="63">
+                    </div>
+                    <div class="field">
+                        <label for="pl-desc">Description</label>
+                        <input id="pl-desc" placeholder="optional">
+                    </div>
+                </div>
+                <div id="pl-steps"></div>
+                <div><button type="button" id="pl-add-step">+ Add step</button></div>
+                <p id="pl-order" class="muted small"></p>
+                <div class="form-actions">
+                    <button type="submit" class="primary" id="pipeline-save">Save pipeline</button>
+                    <button type="button" id="pipeline-cancel">Cancel</button>
+                </div>
+                <p id="pipeline-msg" class="msg" role="status" hidden></p>
+            </form>
+        </section>
+
+        <section class="card" id="presets-card">
+            <div class="card-head">
+                <h2>Pipeline presets</h2>
+                <button type="button" id="new-preset-btn" class="primary" hidden>New preset</button>
+            </div>
+            <p id="presets-disabled" class="muted small" hidden>
+                Presets are turned off because the controller has no <code>PRESET_CM</code> set.
+            </p>
+            <p id="presets-locked-hint" class="muted small" hidden>
+                <button type="button" class="link" id="presets-unlock">Enter the admin token</button> to create or start presets.
+            </p>
+            <div class="table-wrap" id="presets-wrap">
+                <table id="presets">
+                    <thead>
+                        <tr>
+                            <th>Preset</th>
+                            <th class="col-extra">Pipeline</th>
+                            <th class="col-extra">Machine</th>
+                            <th id="preset-action-col" aria-label="Actions"></th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <p id="presets-msg" class="msg" role="status" hidden></p>
+
+            <form id="preset-form" autocomplete="off" hidden>
+                <h3 id="preset-form-title">New preset</h3>
+                <div class="form-grid">
+                    <div class="field">
+                        <label for="p-name">Name</label>
+                        <input id="p-name" required placeholder="e.g. e2e-linux"
+                            pattern="[a-z0-9]([\-a-z0-9]{0,55}[a-z0-9])?" maxlength="57">
+                        <span class="hint">Runs are named after it, e.g. <code>e2e-linux-x7k2p</code>.</span>
+                    </div>
+                    <div class="field">
+                        <label for="p-pipeline">Pipeline</label>
+                        <select id="p-pipeline" required></select>
+                        <span class="hint" id="p-pipeline-desc"></span>
+                    </div>
+                    <div class="field">
+                        <label for="p-machine">Machine</label>
+                        <select id="p-machine" required></select>
+                        <span class="hint">Held for the whole run.</span>
+                    </div>
+                    <div class="field">
+                        <label for="p-task-machine">Task machine</label>
+                        <select id="p-task-machine"></select>
+                        <span class="hint" id="p-task-hint">Optional.</span>
+                    </div>
+                </div>
+                <fieldset id="p-params-set">
+                    <legend>Parameters</legend>
+                    <div class="form-grid" id="p-params"></div>
+                </fieldset>
+                <fieldset id="p-ws-set">
+                    <legend>Workspaces</legend>
+                    <div class="form-grid" id="p-workspaces"></div>
+                </fieldset>
+                <details id="p-advanced">
+                    <summary>Service account and timeout</summary>
+                    <div class="form-grid">
+                        <div class="field">
+                            <label for="p-sa">Service account</label>
+                            <input id="p-sa" placeholder="the namespace default">
+                        </div>
+                        <div class="field">
+                            <label for="p-timeout">Timeout</label>
+                            <input id="p-timeout" placeholder="e.g. 3h or 1h30m">
+                        </div>
+                    </div>
+                </details>
+                <div class="form-actions">
+                    <button type="submit" class="primary" id="preset-save">Save preset</button>
+                    <button type="button" id="preset-cancel">Cancel</button>
+                </div>
+                <p id="preset-msg" class="msg" role="status" hidden></p>
+            </form>
+        </section>
+
+        <section class="card">
+            <h2>Log</h2>
+            <pre id="log">{{ log_contents }}</pre>
+        </section>
+    </main>
 
     <script>
-        var log = document.getElementById('log');
-        log.scrollTop = log.scrollHeight;
+        const API_ENABLED = {{ api_enabled | tojson }};
+        const LABEL_TASK = {{ label_task | tojson }};
+        const TOKEN_KEY = "machineApiToken";
+        let machines = {{ machines | tojson }};
+        let runs = {{ runs | tojson }};
+        let token = loadToken();
+        // machine check results by name, kept across refreshes until hidden or locked
+        const checkResults = {};
+        const checking = new Set();
+        const PRESETS_ENABLED = {{ presets_enabled | tojson }};
+        let presets = {{ presets | tojson }};
+        let pipelines = [];       // loaded when the preset editor opens
+        let editing = null;       // name of the preset in the editor, null for a new one
+        const starting = new Set();
 
-        setInterval(function () {
-            fetch('/log')
-                .then(response => response.json())
-                .then(data => {
-                    log.value = data.log;
-                    log.scrollTop = log.scrollHeight;
+        const $ = id => document.getElementById(id);
+
+        // storage can be blocked (private mode, policies); the page still works, the token just isn't remembered
+        function loadToken() {
+            try { return sessionStorage.getItem(TOKEN_KEY); } catch { return null; }
+        }
+
+        function saveToken(value) {
+            try {
+                if (value) sessionStorage.setItem(TOKEN_KEY, value);
+                else sessionStorage.removeItem(TOKEN_KEY);
+            } catch { }
+        }
+
+        // all server data is inserted with textContent, never innerHTML
+        function el(tag, props = {}, ...children) {
+            const node = Object.assign(document.createElement(tag), props);
+            node.append(...children);
+            return node;
+        }
+
+        function flash(target, text, kind) {
+            target.textContent = text;
+            target.className = `msg ${kind}`;
+            target.hidden = false;
+            clearTimeout(target._timer);
+            if (kind === "ok") target._timer = setTimeout(() => { target.hidden = true; }, 8000);
+        }
+
+        async function api(method, path, body) {
+            const headers = {};
+            if (token) headers.Authorization = `Bearer ${token}`;
+            if (body) headers["Content-Type"] = "application/json";
+            const res = await fetch(path, { method, headers, body: body && JSON.stringify(body) });
+            let data = null;
+            try { data = await res.json(); } catch { }
+            if (res.status === 401) {
+                lock();
+                flash($("token-msg"), "The admin token was rejected, unlock again.", "error");
+            }
+            if (!res.ok) throw new Error(data?.error || `${res.status} ${res.statusText}`);
+            return data;
+        }
+
+        function badge(status) {
+            const kind = status === "free" || status === "busy" ? status : "other";
+            return el("span", { className: `badge ${kind}`, textContent: status });
+        }
+
+        function renderMachines() {
+            const unlocked = API_ENABLED && !!token;
+            const names = Object.keys(machines).sort();
+            $("action-col").hidden = !unlocked;
+            const rows = names.flatMap(name => {
+                const status = machines[name];
+                const users = runs.filter(r => r.machine === name).map(r => r.pipelinerun).join(", ");
+                const row = el("tr", {},
+                    el("td", { className: "name" }, name, users ? el("span", { className: "sub", textContent: users }) : ""),
+                    el("td", {}, badge(status)),
+                    el("td", { className: "muted col-extra", textContent: users || "—" }));
+                if (!unlocked) return [row];
+
+                const busy = status === "busy";
+                const remove = el("button", {
+                    type: "button",
+                    className: "danger",
+                    textContent: "Remove",
+                    disabled: busy,
+                    title: busy ? "A busy machine can't be removed. Wait until its run finishes." : `Remove ${name}`,
                 });
-        }, 5000);
+                remove.addEventListener("click", () => removeMachine(name, remove));
+                const check = el("button", {
+                    type: "button",
+                    textContent: checking.has(name) ? "Checking…" : "Check",
+                    disabled: checking.has(name),
+                    title: `Log in to ${name} and list what it has and what's missing`,
+                });
+                check.addEventListener("click", () => checkMachine(name));
+                row.append(el("td", { className: "actions" }, el("span", { className: "action-buttons" }, check, remove)));
+
+                const details = checkDetails(name);
+                if (!details) return [row];
+                row.classList.add("has-check");
+                return [row, el("tr", { className: "check-row" }, el("td", { colSpan: 4 }, details))];
+            });
+            if (!rows.length) {
+                rows.push(el("tr", {}, el("td", { className: "empty", colSpan: unlocked ? 4 : 3, textContent: "No machines registered yet." })));
+            }
+            $("machines").tBodies[0].replaceChildren(...rows);
+        }
+
+        function checkDetails(name) {
+            const data = checkResults[name];
+            if (!data) {
+                return checking.has(name)
+                    ? el("div", { className: "check-box muted small", textContent: `Logging in to ${name}…` })
+                    : null;
+            }
+            const problems = data.results.filter(r => !r.ok).length;
+            const hide = el("button", { type: "button", className: "link", textContent: "Hide" });
+            hide.addEventListener("click", () => { delete checkResults[name]; renderMachines(); });
+            const head = el("div", { className: "check-head", role: "status" },
+                el("span", problems
+                    ? { className: "problems", textContent: problems === 1 ? "1 problem" : `${problems} problems` }
+                    : { className: "all-ok", textContent: "Everything is in place" }),
+                el("span", { className: "muted", textContent: checking.has(name) ? "checking again…" : `checked ${new Date(data.checked_at).toLocaleTimeString()}` }),
+                hide);
+            const list = el("ul", { className: "check-list" }, ...data.results.map(r =>
+                el("li", { className: r.ok ? "ok" : "fail" },
+                    el("span", { className: "icon", textContent: r.ok ? "✓" : "✗", ariaLabel: r.ok ? "ok" : "problem" }),
+                    el("span", { className: "item", textContent: r.name }),
+                    el("span", { className: "detail", textContent: r.detail }))));
+            return el("div", { className: "check-box" }, head, list);
+        }
+
+        async function checkMachine(name) {
+            checking.add(name);
+            renderMachines();
+            try {
+                checkResults[name] = await api("POST", `/api/machines/${encodeURIComponent(name)}/check`);
+            } catch (e) {
+                flash($("machines-msg"), `Couldn't check ${name}: ${e.message}`, "error");
+            } finally {
+                checking.delete(name);
+                renderMachines();
+            }
+        }
+
+        // ---------------- pipelines built from templates ----------------
+
+        let pipelineList = [];     // every Pipeline in the namespace
+        let catalog = [];          // the Task templates, loaded when the builder opens
+        let draft = null;          // the pipeline in the builder: {steps: [...]}
+        let editingPipeline = null;
+
+        function renderPipelines(error) {
+            const unlocked = API_ENABLED && !!token;
+            $("new-pipeline-btn").hidden = !unlocked;
+            $("pipelines-locked-hint").hidden = !(API_ENABLED && !unlocked);
+            $("pipeline-action-col").hidden = !unlocked;
+            const rows = pipelineList.map(p => {
+                const made = p.built ? "here" : "elsewhere";
+                const row = el("tr", {},
+                    el("td", { className: "name" }, p.name, el("span", { className: "sub", textContent: `${p.steps} steps · made ${made}` })),
+                    el("td", { className: "col-extra", textContent: p.steps }),
+                    el("td", { className: "muted col-extra", textContent: made }));
+                if (unlocked) {
+                    const cell = el("td", { className: "actions" });
+                    if (p.built) {
+                        const edit = el("button", { type: "button", textContent: "Edit", title: `Edit pipeline ${p.name}` });
+                        edit.addEventListener("click", () => openPipelineForm(p.name));
+                        const del = el("button", { type: "button", className: "danger", textContent: "Delete", title: `Delete pipeline ${p.name}` });
+                        del.addEventListener("click", () => deletePipeline(p.name, del));
+                        cell.append(el("span", { className: "action-buttons" }, edit, del));
+                    } else {
+                        cell.append(el("span", { className: "muted small", textContent: "read-only" }));
+                    }
+                    row.append(cell);
+                }
+                return row;
+            });
+            if (!rows.length) {
+                const text = error ? `Can't read the pipelines: ${error}` : "No pipelines in this namespace.";
+                rows.push(el("tr", {}, el("td", { className: "empty", colSpan: unlocked ? 4 : 3, textContent: text })));
+            }
+            $("pipelines").tBodies[0].replaceChildren(...rows);
+        }
+
+        async function refreshPipelines() {
+            // separate from refresh(): missing access to pipelines mustn't mark the whole page stale
+            try {
+                pipelineList = await fetch("/api/pipelines").then(async res => {
+                    if (res.ok) return res.json();
+                    throw new Error((await res.json().catch(() => ({}))).error || res.status);
+                });
+                renderPipelines();
+            } catch (e) {
+                pipelineList = [];
+                renderPipelines(e.message);
+            }
+        }
+
+        const templateOf = path => catalog.find(t => t.path === path);
+        const mainSteps = () => draft.steps.filter(s => !s.finally);
+
+        // steps a step may wait for or take outputs from: earlier main steps; a step at the end may use any main step
+        function earlierSteps(step) {
+            const index = draft.steps.indexOf(step);
+            return step.finally ? mainSteps() : draft.steps.slice(0, index).filter(s => !s.finally);
+        }
+
+        function sourcesFor(param, step) {
+            const sources = [];
+            if (param.default !== null && param.default !== undefined) {
+                sources.push(["default", `Template default (${JSON.stringify(param.default)})`]);
+            }
+            if (param.type === "string") sources.push(["fixed", "Fixed value"]);
+            sources.push(["start", "Ask when starting"]);
+            if (param.type === "string" && earlierSteps(step).some(s => templateOf(s.template)?.results.length)) {
+                sources.push(["step", "Output of an earlier step"]);
+            }
+            return sources;
+        }
+
+        function inputRow(step, param) {
+            const sources = sourcesFor(param, step);
+            let current = step.inputs[param.name];
+            if (!current || !sources.some(([value]) => value === current.from)) {
+                // the template's default if it has one, otherwise asked when starting
+                current = { from: sources[0][0] === "default" ? "default" : "start" };
+                step.inputs[param.name] = current;
+            }
+            const select = el("select", { ariaLabel: `${step.name}: ${param.name} comes from` },
+                ...sources.map(([value, text]) => el("option", { value, textContent: text })));
+            select.value = current.from;
+            select.addEventListener("change", () => { step.inputs[param.name] = { from: select.value }; renderSteps(); });
+
+            let value;
+            if (current.from === "fixed") {
+                value = el("input", { value: current.value ?? "", ariaLabel: `${step.name}: ${param.name} value`, placeholder: "value" });
+                current.value = value.value;
+                value.addEventListener("input", () => { current.value = value.value; });
+            } else if (current.from === "step") {
+                const options = earlierSteps(step).flatMap(s => (templateOf(s.template)?.results || []).map(r =>
+                    el("option", { value: `${s.name}\n${r.name}`, textContent: `${s.name} → ${r.name}` })));
+                value = el("select", { ariaLabel: `${step.name}: ${param.name} output` }, ...options);
+                const chosen = `${current.step}\n${current.result}`;
+                value.value = options.some(o => o.value === chosen) ? chosen : options[0].value;
+                [current.step, current.result] = value.value.split("\n");
+                value.addEventListener("change", () => { [current.step, current.result] = value.value.split("\n"); renderOrder(); });
+            } else {
+                value = el("span", { className: "note", textContent: current.from === "start" ? "filled in by the preset" : "" });
+            }
+            const required = param.default === null || param.default === undefined;
+            const row = el("div", { className: "input-row" },
+                el("span", { className: "in-name" }, param.name, required ? el("span", { className: "req", textContent: " required" }) : "",
+                    el("span", { className: "hint", textContent: param.description })),
+                select, value);
+            row.dataset.param = param.name;
+            return row;
+        }
+
+        function templateSelect(step) {
+            const groups = {};
+            for (const t of catalog) (groups[t.path.split("/")[0]] ??= []).push(t);
+            const select = el("select", { required: true, ariaLabel: `${step.name}: template` },
+                el("option", { value: "", textContent: "Choose a template…" }),
+                ...Object.entries(groups).map(([folder, templates]) => el("optgroup", { label: folder },
+                    ...templates.map(t => el("option", { value: t.path, textContent: `${t.name} (${t.path})` })))));
+            select.value = step.template;
+            select.addEventListener("change", () => {
+                const template = templateOf(select.value);
+                if (template && /^step-\d+$/.test(step.name)) renameStep(step, uniqueStepName(template.name, step));
+                step.template = select.value;
+                step.inputs = {};
+                renderSteps();
+            });
+            return select;
+        }
+
+        function uniqueStepName(base, except) {
+            const taken = new Set(draft.steps.filter(s => s !== except).map(s => s.name));
+            let name = base, n = 2;
+            while (taken.has(name)) name = `${base}-${n++}`;
+            return name;
+        }
+
+        function renameStep(step, name) {
+            for (const other of draft.steps) {
+                other.run_after = other.run_after.map(r => r === step.name ? name : r);
+                for (const input of Object.values(other.inputs)) if (input.from === "step" && input.step === step.name) input.step = name;
+            }
+            step.name = name;
+        }
+
+        function forgetStep(step) {
+            for (const other of draft.steps) {
+                other.run_after = other.run_after.filter(r => r !== step.name);
+                for (const [param, input] of Object.entries(other.inputs)) {
+                    if (input.from === "step" && input.step === step.name) delete other.inputs[param];
+                }
+            }
+        }
+
+        function placeSteps() {
+            // steps at the end come last, the others before them
+            draft.steps = [...mainSteps(), ...draft.steps.filter(s => s.finally)];
+        }
+
+        function stepCard(step, index) {
+            const template = templateOf(step.template);
+            const name = el("input", { value: step.name, required: true, pattern: "[a-z0-9]([\\-a-z0-9]{0,61}[a-z0-9])?", ariaLabel: `step ${index + 1} name` });
+            name.addEventListener("change", () => { renameStep(step, name.value.trim()); renderSteps(); });
+            const when = el("select", { ariaLabel: `${step.name}: when it runs` },
+                el("option", { value: "main", textContent: "In the main flow" }),
+                el("option", { value: "end", textContent: "At the end, always" }));
+            when.value = step.finally ? "end" : "main";
+            when.addEventListener("change", () => {
+                step.finally = when.value === "end";
+                if (step.finally) { step.run_after = []; forgetStep(step); }
+                placeSteps();
+                renderSteps();
+            });
+            const remove = el("button", { type: "button", className: "link", textContent: "Remove step" });
+            remove.addEventListener("click", () => { forgetStep(step); draft.steps.splice(draft.steps.indexOf(step), 1); renderSteps(); });
+
+            const card = el("div", { className: `step-card${step.finally ? " at-end" : ""}` },
+                el("div", { className: "step-head" }, el("span", { className: "step-no", textContent: index + 1 }), name, templateSelect(step), when, remove));
+            card.dataset.step = step.name;
+            if (template?.description) card.append(el("p", { className: "muted small", textContent: template.description }));
+            if (!step.finally) {
+                const earlier = earlierSteps(step);
+                const waits = el("div", { className: "waits" }, el("span", { className: "muted", textContent: "Waits for:" }));
+                if (!earlier.length) waits.append(el("span", { textContent: "nothing, starts right away" }));
+                for (const other of earlier) {
+                    const box = el("input", { type: "checkbox", checked: step.run_after.includes(other.name) });
+                    box.addEventListener("change", () => {
+                        step.run_after = box.checked ? [...step.run_after, other.name] : step.run_after.filter(r => r !== other.name);
+                        renderOrder();
+                    });
+                    waits.append(el("label", {}, box, other.name));
+                }
+                card.append(waits);
+            } else {
+                card.append(el("p", { className: "muted small", textContent: "Runs after all the other steps, even if one of them failed." }));
+            }
+            if (template?.params.length) {
+                card.append(el("div", { className: "step-inputs" }, ...template.params.map(p => inputRow(step, p))));
+            }
+            return card;
+        }
+
+        function renderOrder() {
+            // which steps run together: a step starts after the steps it waits for or takes outputs from
+            const level = {};
+            for (const step of mainSteps()) {
+                const deps = [...step.run_after, ...Object.values(step.inputs).filter(i => i.from === "step").map(i => i.step)];
+                level[step.name] = 1 + Math.max(0, ...deps.map(d => level[d] || 0));
+            }
+            const stages = [];
+            for (const [name, l] of Object.entries(level)) (stages[l - 1] ??= []).push(name);
+            const atEnd = draft.steps.filter(s => s.finally).map(s => s.name);
+            const flow = stages.filter(Boolean).map(names => names.join(" + ")).join("  →  ");
+            $("pl-order").textContent = flow ? `Order: ${flow}${atEnd.length ? `  →  at the end: ${atEnd.join(", ")}` : ""}` : "";
+        }
+
+        function renderSteps() {
+            $("pl-steps").replaceChildren(...draft.steps.map(stepCard));
+            renderOrder();
+        }
+
+        function addStep() {
+            const main = mainSteps();
+            const step = { name: uniqueStepName(`step-${draft.steps.length + 1}`), template: "", finally: false,
+                           run_after: main.length ? [main[main.length - 1].name] : [], inputs: {} };
+            draft.steps.splice(main.length, 0, step);
+            renderSteps();
+        }
+
+        async function openPipelineForm(name) {
+            editingPipeline = name;
+            $("pipeline-form-title").textContent = name ? `Edit pipeline ${name}` : "New pipeline";
+            $("pl-name").value = name || "";
+            $("pl-name").readOnly = !!name;
+            $("pipeline-msg").hidden = true;
+            $("pl-steps").replaceChildren(el("p", { className: "muted small", textContent: "Loading the templates…" }));
+            $("pl-order").textContent = "";
+            $("pipeline-form").hidden = false;
+            $("pipeline-form").scrollIntoView({ block: "nearest" });
+            try {
+                catalog = await api("GET", "/api/templates");
+                draft = name ? await api("GET", `/api/pipelines/${encodeURIComponent(name)}`) : { description: "", steps: [] };
+            } catch (e) {
+                $("pl-steps").replaceChildren();
+                flash($("pipeline-msg"), `Couldn't open the builder: ${e.message}`, "error");
+                return;
+            }
+            if (editingPipeline !== name || $("pipeline-form").hidden) return;
+            $("pl-desc").value = draft.description || "";
+            if (!draft.steps.length) addStep(); else renderSteps();
+            (name ? $("pl-desc") : $("pl-name")).focus();
+        }
+
+        function closePipelineForm() {
+            editingPipeline = null;
+            draft = null;
+            $("pipeline-form").hidden = true;
+        }
+
+        $("new-pipeline-btn").addEventListener("click", () => openPipelineForm(null));
+        $("pipeline-cancel").addEventListener("click", closePipelineForm);
+        $("pipelines-unlock").addEventListener("click", () => $("token-input").focus());
+        $("pl-add-step").addEventListener("click", addStep);
+
+        $("pipeline-form").addEventListener("submit", async ev => {
+            ev.preventDefault();
+            const name = editingPipeline || $("pl-name").value.trim();
+            const existing = pipelineList.find(p => p.name === name);
+            if (!editingPipeline && existing?.built && !confirm(`Pipeline ${name} already exists. Replace it?`)) return;
+            const body = {
+                description: $("pl-desc").value.trim(),
+                steps: draft.steps.map(s => ({ name: s.name, template: s.template, finally: s.finally, run_after: s.run_after, inputs: s.inputs })),
+            };
+            $("pipeline-save").disabled = true;
+            try {
+                await api("PUT", `/api/pipelines/${encodeURIComponent(name)}`, body);
+                closePipelineForm();
+                flash($("pipelines-msg"), `Saved pipeline ${name}. Presets can use it now.`, "ok");
+                await refreshPipelines();
+            } catch (e) {
+                flash($("pipeline-msg"), e.message, "error");
+            } finally {
+                $("pipeline-save").disabled = false;
+            }
+        });
+
+        async function deletePipeline(name, btn) {
+            if (!confirm(`Delete pipeline ${name}?\n\nPresets that use it can't start until they're edited. Runs already started aren't affected.`)) return;
+            btn.disabled = true;
+            try {
+                await api("DELETE", `/api/pipelines/${encodeURIComponent(name)}`);
+                if (editingPipeline === name) closePipelineForm();
+                flash($("pipelines-msg"), `Deleted pipeline ${name}.`, "ok");
+                await refreshPipelines();
+            } catch (e) {
+                flash($("pipelines-msg"), e.message, "error");
+                btn.disabled = false;
+            }
+        }
+
+        // ---------------- presets ----------------
+
+        function machinesOf(p) {
+            return p.task_machine ? `${p.machine} + ${p.task_machine}` : p.machine;
+        }
+
+        function renderPresets() {
+            const unlocked = API_ENABLED && !!token;
+            $("presets-disabled").hidden = PRESETS_ENABLED;
+            $("presets-wrap").hidden = !PRESETS_ENABLED;
+            $("new-preset-btn").hidden = !(PRESETS_ENABLED && unlocked);
+            $("presets-locked-hint").hidden = !(PRESETS_ENABLED && API_ENABLED && !unlocked);
+            $("preset-action-col").hidden = !unlocked;
+            if (!PRESETS_ENABLED) return;
+            const rows = Object.keys(presets).sort().map(name => {
+                const p = presets[name];
+                const row = el("tr", {},
+                    el("td", { className: "name" }, name, el("span", { className: "sub", textContent: `${p.pipeline} on ${machinesOf(p)}` })),
+                    el("td", { className: "name col-extra", textContent: p.pipeline }),
+                    el("td", { className: "name col-extra", textContent: machinesOf(p) }));
+                if (unlocked) {
+                    const start = el("button", {
+                        type: "button",
+                        className: "primary",
+                        textContent: starting.has(name) ? "Starting…" : "Start",
+                        disabled: starting.has(name),
+                        title: `Start ${p.pipeline} on ${machinesOf(p)}`,
+                    });
+                    start.addEventListener("click", () => startPreset(name));
+                    const edit = el("button", { type: "button", textContent: "Edit", title: `Edit preset ${name}` });
+                    edit.addEventListener("click", () => openPresetForm(name));
+                    const del = el("button", { type: "button", className: "danger", textContent: "Delete", title: `Delete preset ${name}` });
+                    del.addEventListener("click", () => deletePreset(name, del));
+                    row.append(el("td", { className: "actions" }, el("span", { className: "action-buttons" }, start, edit, del)));
+                }
+                return row;
+            });
+            if (!rows.length) {
+                rows.push(el("tr", {}, el("td", { className: "empty", colSpan: unlocked ? 4 : 3, textContent: "No presets yet." })));
+            }
+            $("presets").tBodies[0].replaceChildren(...rows);
+        }
+
+        function fillMachineSelect(select, current, optional) {
+            const names = Object.keys(machines).sort();
+            const options = names.map(n => el("option", { value: n, textContent: `${n} (${machines[n]})` }));
+            if (current && !names.includes(current)) {
+                options.unshift(el("option", { value: current, textContent: `${current} (not registered)` }));
+            }
+            if (optional) options.unshift(el("option", { value: "", textContent: "None" }));
+            select.replaceChildren(...options);
+            select.value = current || (optional ? "" : names[0] || "");
+        }
+
+        const WORKSPACE_TYPES = [
+            ["volumeClaimTemplate", "New volume each run", "size, e.g. 1Gi"],
+            ["persistentVolumeClaim", "Existing PVC", "PVC name"],
+            ["secret", "Secret", "secret name"],
+            ["configMap", "ConfigMap", "ConfigMap name"],
+            ["emptyDir", "Empty directory", null],
+        ];
+
+        function workspaceField(ws, saved) {
+            const select = el("select", { "ariaLabel": `${ws.name}: how to bind it` },
+                ...(ws.optional ? [el("option", { value: "", textContent: "Not bound" })] : []),
+                ...WORKSPACE_TYPES.map(([value, text]) => el("option", { value, textContent: text })));
+            select.value = saved?.type ?? (ws.optional ? "" : "volumeClaimTemplate");
+            const input = el("input", { value: saved?.value || "", "ariaLabel": `${ws.name}: value` });
+            const update = () => {
+                const placeholder = WORKSPACE_TYPES.find(([value]) => value === select.value)?.[2];
+                input.hidden = !placeholder;
+                input.required = !!placeholder;
+                input.placeholder = placeholder || "";
+            };
+            select.addEventListener("change", update);
+            update();
+            const field = el("div", { className: "field" },
+                el("span", { className: "label" }, ws.name, ws.optional ? el("span", { className: "req", textContent: " optional" }) : ""),
+                el("div", { className: "ws-row" }, select, input),
+                el("span", { className: "hint", textContent: ws.description }));
+            field.dataset.workspace = ws.name;
+            return field;
+        }
+
+        function paramField(param, saved) {
+            const required = param.default === null || param.default === undefined;
+            const input = el("input", { className: "param", required: required && param.type === "string" });
+            input.dataset.param = param.name;
+            if (param.type !== "string") {
+                input.disabled = true;
+                input.placeholder = `${param.type}, the pipeline's default is used`;
+            } else {
+                input.value = saved ?? "";
+                input.placeholder = required ? "required" : `default: ${param.default}`;
+            }
+            return el("label", { className: "field" },
+                el("span", { className: "label" }, param.name, required ? el("span", { className: "req", textContent: " required" }) : ""),
+                input,
+                el("span", { className: "hint", textContent: param.description }));
+        }
+
+        function renderPipelineFields() {
+            const saved = editing ? presets[editing] : null;
+            const pipeline = pipelines.find(p => p.name === $("p-pipeline").value);
+            $("p-pipeline-desc").textContent = pipeline?.description || "";
+            const params = pipeline?.params || [];
+            const workspaces = pipeline?.workspaces || [];
+            $("p-params-set").hidden = !params.length;
+            $("p-ws-set").hidden = !workspaces.length;
+            $("p-params").replaceChildren(...params.map(p => paramField(p, saved?.params?.[p.name])));
+            $("p-workspaces").replaceChildren(...workspaces.map(w => workspaceField(w, saved?.workspaces?.[w.name])));
+        }
+
+        async function openPresetForm(name) {
+            editing = name;
+            const saved = name ? presets[name] : null;
+            $("preset-form-title").textContent = name ? `Edit preset ${name}` : "New preset";
+            $("p-name").value = name || "";
+            $("p-name").readOnly = !!name;
+            $("p-sa").value = saved?.service_account || "";
+            $("p-timeout").value = saved?.timeout || "";
+            $("p-advanced").open = !!(saved?.service_account || saved?.timeout);
+            $("p-task-hint").textContent = LABEL_TASK ? `Optional, held until task ${LABEL_TASK} finishes.` : "Optional.";
+            fillMachineSelect($("p-machine"), saved?.machine, false);
+            fillMachineSelect($("p-task-machine"), saved?.task_machine, true);
+            $("preset-msg").hidden = true;
+            $("p-pipeline").replaceChildren(el("option", { value: "", textContent: "Loading pipelines…" }));
+            $("p-params").replaceChildren();
+            $("p-workspaces").replaceChildren();
+            $("preset-form").hidden = false;
+            $("preset-form").scrollIntoView({ block: "nearest" });
+            try {
+                pipelines = await api("GET", "/api/pipelines");
+            } catch (e) {
+                pipelines = [];
+                flash($("preset-msg"), `Couldn't load the pipelines: ${e.message}`, "error");
+            }
+            if (editing !== name || $("preset-form").hidden) return;  // closed or switched meanwhile
+            const options = pipelines.map(p => el("option", { value: p.name, textContent: p.name }));
+            if (saved && !pipelines.some(p => p.name === saved.pipeline)) {
+                options.unshift(el("option", { value: saved.pipeline, textContent: `${saved.pipeline} (no longer exists)` }));
+            }
+            if (!options.length) options.push(el("option", { value: "", textContent: "No pipelines in this namespace" }));
+            $("p-pipeline").replaceChildren(...options);
+            $("p-pipeline").value = saved?.pipeline || pipelines[0]?.name || "";
+            renderPipelineFields();
+            (name ? $("p-pipeline") : $("p-name")).focus();
+        }
+
+        function closePresetForm() {
+            editing = null;
+            $("preset-form").hidden = true;
+        }
+
+        $("p-pipeline").addEventListener("change", renderPipelineFields);
+        $("preset-cancel").addEventListener("click", closePresetForm);
+        $("new-preset-btn").addEventListener("click", () => openPresetForm(null));
+        $("presets-unlock").addEventListener("click", () => $("token-input").focus());
+
+        $("preset-form").addEventListener("submit", async ev => {
+            ev.preventDefault();
+            const name = editing || $("p-name").value.trim();
+            if (!editing && presets[name] && !confirm(`Preset ${name} already exists. Replace it?`)) return;
+            const body = {
+                pipeline: $("p-pipeline").value,
+                machine: $("p-machine").value,
+                task_machine: $("p-task-machine").value,
+                params: {},
+                workspaces: {},
+                service_account: $("p-sa").value.trim(),
+                timeout: $("p-timeout").value.trim(),
+            };
+            for (const input of $("p-params").querySelectorAll("input.param:not(:disabled)")) {
+                if (input.value.trim()) body.params[input.dataset.param] = input.value.trim();
+            }
+            for (const field of $("p-workspaces").querySelectorAll("[data-workspace]")) {
+                const type = field.querySelector("select").value;
+                if (type) body.workspaces[field.dataset.workspace] = { type, value: field.querySelector("input").value.trim() };
+            }
+            $("preset-save").disabled = true;
+            try {
+                await api("PUT", `/api/presets/${encodeURIComponent(name)}`, body);
+                closePresetForm();
+                flash($("presets-msg"), `Saved preset ${name}.`, "ok");
+                await refresh();
+            } catch (e) {
+                flash($("preset-msg"), e.message, "error");
+            } finally {
+                $("preset-save").disabled = false;
+            }
+        });
+
+        async function startPreset(name) {
+            starting.add(name);
+            renderPresets();
+            try {
+                const run = await api("POST", `/api/presets/${encodeURIComponent(name)}/start`);
+                const held = run.task_machine ? `${run.machine} and ${run.task_machine} are` : `${run.machine} is`;
+                flash($("presets-msg"), `Started ${run.pipelinerun}. It runs as soon as ${held} free.`, "ok");
+                await refresh();
+            } catch (e) {
+                flash($("presets-msg"), `Couldn't start ${name}: ${e.message}`, "error");
+            } finally {
+                starting.delete(name);
+                renderPresets();
+            }
+        }
+
+        async function deletePreset(name, btn) {
+            if (!confirm(`Delete preset ${name}?\n\nRuns it already started aren't affected.`)) return;
+            btn.disabled = true;
+            try {
+                await api("DELETE", `/api/presets/${encodeURIComponent(name)}`);
+                if (editing === name) closePresetForm();
+                flash($("presets-msg"), `Deleted preset ${name}.`, "ok");
+                await refresh();
+            } catch (e) {
+                flash($("presets-msg"), e.message, "error");
+                btn.disabled = false;
+            }
+        }
+
+        function renderRuns() {
+            const rows = runs.map(r => {
+                const until = r.until === "task" ? `task ${LABEL_TASK || ""} finishes` : "run finishes";
+                return el("tr", {},
+                    el("td", { className: "name" }, r.pipelinerun, el("span", { className: "sub", textContent: `until ${until}` })),
+                    el("td", { className: "name", textContent: r.machine }),
+                    el("td", { className: "muted col-extra", textContent: until }));
+            });
+            if (!rows.length) {
+                rows.push(el("tr", {}, el("td", { className: "empty", colSpan: 3, textContent: "Nothing is running." })));
+            }
+            $("runs").tBodies[0].replaceChildren(...rows);
+        }
+
+        function renderAuth() {
+            const unlocked = API_ENABLED && !!token;
+            $("api-disabled").hidden = API_ENABLED;
+            $("auth").hidden = !API_ENABLED;
+            $("unlock-form").hidden = unlocked;
+            $("unlocked").hidden = !unlocked;
+            $("add-card").hidden = !API_ENABLED;
+            // locked: collapse the form to a dimmed placeholder
+            $("add-card").classList.toggle("locked", !unlocked);
+            $("add-form").hidden = !unlocked;
+            $("add-fields").disabled = !unlocked;
+            $("locked-hint").hidden = unlocked;
+            if (!unlocked) $("add-msg").hidden = true;
+            if (!unlocked) closePresetForm();
+            if (!unlocked) closePipelineForm();
+            renderMachines();
+            renderPipelines();
+            renderPresets();
+        }
+
+        function lock() {
+            token = null;
+            saveToken(null);
+            for (const name in checkResults) delete checkResults[name];
+            renderAuth();
+        }
+
+        $("unlock-form").addEventListener("submit", async ev => {
+            ev.preventDefault();
+            const candidate = $("token-input").value.trim();
+            if (!candidate) {
+                flash($("token-msg"), "Enter the admin token first.", "error");
+                $("token-input").focus();
+                return;
+            }
+            try {
+                const res = await fetch("/api/token-check", { headers: { Authorization: `Bearer ${candidate}` } });
+                if (res.status === 401) throw new Error("Wrong admin token.");
+                if (!res.ok) throw new Error(`Couldn't check the token (${res.status}).`);
+            } catch (e) {
+                flash($("token-msg"), e.message, "error");
+                return;
+            }
+            token = candidate;
+            saveToken(token);
+            $("token-input").value = "";
+            $("token-msg").hidden = true;
+            renderAuth();
+        });
+
+        $("lock-btn").addEventListener("click", lock);
+        $("locked-unlock").addEventListener("click", () => $("token-input").focus());
+
+        $("f-keyfile").addEventListener("change", async ev => {
+            const file = ev.target.files[0];
+            if (file) $("f-key").value = await file.text();
+            ev.target.value = "";
+        });
+
+        $("add-form").addEventListener("submit", async ev => {
+            ev.preventDefault();
+            const body = Object.fromEntries(new FormData(ev.target));
+            $("add-btn").disabled = true;
+            try {
+                await api("POST", "/api/machines", body);
+                ev.target.reset();
+                flash($("add-msg"), `Added ${body.name}. Pipelines can use it once they name it in their machine label.`, "ok");
+                await refresh();
+            } catch (e) {
+                flash($("add-msg"), e.message, "error");
+            } finally {
+                $("add-btn").disabled = false;
+            }
+        });
+
+        async function removeMachine(name, btn) {
+            const question = `Remove machine ${name}?\n\n` +
+                "Its secret is deleted if it was added here. Pipelines that still use it will stay pending until they are updated.";
+            if (!confirm(question)) return;
+            btn.disabled = true;
+            try {
+                await api("DELETE", `/api/machines/${encodeURIComponent(name)}`);
+                flash($("machines-msg"), `Removed ${name}.`, "ok");
+                await refresh();
+            } catch (e) {
+                flash($("machines-msg"), e.message, "error");
+                btn.disabled = false;
+            }
+        }
+
+        const json = res => res.ok ? res.json() : Promise.reject(new Error(res.status));
+
+        async function refresh() {
+            try {
+                [machines, runs, presets] = await Promise.all([
+                    fetch("/api/machines").then(json),
+                    fetch("/api/runs").then(json),
+                    PRESETS_ENABLED ? fetch("/api/presets").then(json) : {},
+                ]);
+                renderMachines();
+                renderRuns();
+                renderPresets();
+                refreshPipelines();
+                $("updated").textContent = `Updated ${new Date().toLocaleTimeString()}`;
+                $("updated").classList.remove("stale");
+            } catch {
+                $("updated").textContent = "Can't reach the controller";
+                $("updated").classList.add("stale");
+            }
+        }
+
+        async function refreshLog() {
+            const log = $("log");
+            // keep the reader's scroll position unless they're following the tail
+            const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 24;
+            try {
+                const data = await fetch("/log").then(json);
+                log.textContent = data.log;
+                if (atBottom) log.scrollTop = log.scrollHeight;
+            } catch { }
+        }
+
+        renderAuth();
+        renderRuns();
+        refreshPipelines();
+        $("updated").textContent = `Updated ${new Date().toLocaleTimeString()}`;
+        $("log").scrollTop = $("log").scrollHeight;
+        setInterval(refresh, 10000);
+        setInterval(refreshLog, 5000);
     </script>
 </body>
 

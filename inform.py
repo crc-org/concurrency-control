@@ -1,17 +1,32 @@
 import paramiko
-import runcmd
 import json
 import io
+import os
+import machines
+
+def load_key(keypath: str):
+    # any key type ssh-keygen makes (RSA, ECDSA, Ed25519), not only RSA
+    return paramiko.PKey.from_path(keypath)
 
 def get_machine_secret(secret_name:str):
-    _, username, _ = runcmd.run_cmd(f"cat /opt/{secret_name}/username")
-    _, host, _ = runcmd.run_cmd(f"cat /opt/{secret_name}/host")
+    # machines added through the API have no mounted secret, read it from the cluster
+    if not os.path.isdir(f"/opt/{secret_name}"):
+        return machines.fetch_secret(secret_name)
+    with open(f"/opt/{secret_name}/username") as f:
+        username = f.read().strip()
+    with open(f"/opt/{secret_name}/host") as f:
+        host = f.read().strip()
     keypath = f"/opt/{secret_name}/id_rsa"
     return host, username, keypath
 
 def set_inform_message(machine:str, piprlinerun: str):
     message = "current machine is occuied by pipelinerun {}\nPlease not modify anything affects testing".format(piprlinerun)
-    host, user, keypath = get_machine_secret(machine)
+    # a missing or unreadable secret must not stop the controller loop
+    try:
+        host, user, keypath = get_machine_secret(machine)
+    except Exception as e:
+        print(f"Error reading secret of {machine}, skip setting motd: {e}")
+        return
     if "windows" in machine:
         os = "windows"
     else:
@@ -19,7 +34,11 @@ def set_inform_message(machine:str, piprlinerun: str):
     set_remote_motd(host, user, keypath, message, os)
 
 def clean_inform_message(machine:str):
-    host, user, keypath = get_machine_secret(machine)
+    try:
+        host, user, keypath = get_machine_secret(machine)
+    except Exception as e:
+        print(f"Error reading secret of {machine}, skip clearing motd: {e}")
+        return
     if "windows" in machine:
         os = "windows"
     else:
@@ -30,7 +49,7 @@ def set_remote_motd(host, user, keypath, message, os_type='linux'):
     try:
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        private_key = paramiko.RSAKey.from_private_key_file(keypath)
+        private_key = load_key(keypath)
         ssh.connect(host, username=user, pkey=private_key)   
     except Exception as e:
         print(f"Unexpected error ssh to {host}: {e}")
@@ -84,9 +103,8 @@ def clear_remote_motd(host, user, keypath,os_type='linux'):
     else:
         MOTD_FILE_PATH = "/etc/motd"
 
-    private_key = paramiko.RSAKey.from_private_key_file(keypath)
-    
     try:
+        private_key = load_key(keypath)
         ssh.connect(host, username=user, pkey=private_key)
     except Exception as e:
         print(f"Error clear motd for {host}: {e}")

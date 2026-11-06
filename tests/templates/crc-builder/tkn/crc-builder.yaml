@@ -1,0 +1,20 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: crc-builder
+spec:
+  description: Builds the crc binary
+  params:
+    - name: s3-credentials
+      default: s3-aws-crcqe-asia
+    - name: crc-scm-pr
+      default: "''"
+    - name: debug
+      default: 'false'
+  results:
+    - name: downloadable-base-url
+    - name: distributable-name
+  steps:
+    - name: build
+      image: quay.io/crc-org/crc-builder:v1
+      script: echo

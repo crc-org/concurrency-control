@@ -1,0 +1,20 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: crc-e2e-test
+spec:
+  description: Runs the crc e2e and integration tests on a machine
+  params:
+    - name: secret-host
+      description: secret with the machine's host info
+    - name: os
+    - name: bundle-location
+      description: where the bundle is on the machine
+    - name: debug
+      default: 'false'
+  results:
+    - name: e2e-duration
+  steps:
+    - name: test
+      image: quay.io/crc-org/crc-e2e:v1
+      script: echo

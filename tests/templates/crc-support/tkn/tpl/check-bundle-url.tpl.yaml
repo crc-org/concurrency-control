@@ -1,0 +1,7 @@
+# the unrendered template the Makefile turns into ../check-bundle-url.yaml; not offered
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: check-bundle-url
+spec:
+  steps: []

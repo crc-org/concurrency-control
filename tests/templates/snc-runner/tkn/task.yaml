@@ -1,0 +1,17 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: snc-runner
+spec:
+  params:
+    - name: debug
+      type: string
+      default: 'false'
+  workspaces:
+    - name: storage
+    - name: ocp-pullsecret
+      optional: true
+  steps:
+    - name: run
+      image: quay.io/crc-org/snc-runner:v1
+      script: echo
